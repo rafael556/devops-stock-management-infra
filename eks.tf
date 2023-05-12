@@ -12,23 +12,13 @@ module "eks" {
   subnet_ids = module.vpc.private_subnets
 
   enable_irsa = true
-
-  eks_managed_node_group_defaults = {
-    disk_size = 50
-  }
-
   eks_managed_node_groups = {
     general = {
       desired_size = 1
       min_size     = 1
-      max_size     = 10
-
-      labels = {
-        role = "general"
-      }
+      max_size     = 3
 
       instance_types = ["t2.small"]
-      capacity_type  = "ON_DEMAND"
     }
   }
 }

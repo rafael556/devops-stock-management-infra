@@ -1,5 +1,5 @@
-variable "region" {
-  description = "AWS VPC Region"
-  type        = string
-  default     = "us-east-1"
-}
+variable "region" {}
+variable "public_subnets_cidr_blocks" {}
+variable "public_subnets_names" {}
+variable "private_subnets_cidr_blocks" {}
+variable "private_subnets_names" {}
