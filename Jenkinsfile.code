@@ -1,0 +1,170 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Fetch code') {
+            parallel {
+                stage('Front') {
+                    steps {
+                        git branch: 'main', url: 'https://github.com/RenatoMoratto/devops-stock-management-web.git'
+                    }
+                }
+                stage('Back') {
+                    steps {
+                        git branch: 'main', url: 'https://github.com/rafael556/devops-stock-management-api.git'
+                    }
+                }
+                stage('Infra') {
+                    steps {
+                        git branch: 'main', url: 'https://github.com/rafael556/devops-stock-management-infra.git'
+                    }
+                }
+            }
+        }
+
+        stage('Front Build') {
+            when {
+                branch 'front'
+            }
+            steps {
+                sh 'yarn'
+            }
+        }
+
+        stage('Front Test') {
+            when {
+                branch 'front'
+            }
+            steps {
+                sh 'yarn coverage'
+            }
+        }
+
+        stage('Front Scan') {
+            when {
+                branch 'front'
+            }
+            environment {
+                scannerHome = tool 'sonar'
+            }
+            steps {
+                withSonarQubeEnv('sonar') {
+                sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=devops-stock-management-web \
+                    -Dsonar.projectName=devops-stock-management-web \
+                    -Dsonar.projectVersion=1.0 \
+                    -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                '''
+                }
+            }
+        }
+
+        stage('Front Quality Gate') {
+            when {
+                branch 'front'
+            }
+            steps {
+            timeout(time: 1, unit: 'HOURS') {
+          waitForQualityGate abortPipeline: true
+            }
+          }
+        }
+
+        stage('Build Docker image') {
+            steps {
+                script {
+                docker.build(appRegistry + ":$BUILD_NUMBER", '/Dockerfile')
+                }
+            }
+        }
+
+        stage('Push Image to ECR') {
+            steps{
+            script {
+              docker.withRegistry( vprofileRegistry, registryCredential ) {
+                dockerImage.push("$BUILD_NUMBER")
+                dockerImage.push('latest')
+              }
+            }
+          }
+        }
+
+        stage('Back Build') {
+            when {
+                branch 'back'
+            }
+            steps {
+                sh 'yarn'
+            }
+        }
+
+        stage('Back Test') {
+            when {
+                branch 'back'
+            }
+            steps {
+                sh 'yarn test:cov'
+            }
+        }
+
+        stage('Analysis') {
+            environment {
+                scannerHome = tool 'sonar'
+            }
+            steps {
+                withSonarQubeEnv('sonar') {
+                sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=devops-stock-management-api \
+                    -Dsonar.projectName=devops-stock-management-api \
+                    -Dsonar.projectVersion=1.0 \
+                    -Dsonar.testExecutionReportPaths=coverage/test-reporter.xml'
+                '''
+                }
+            }
+        }
+
+        stage('Back Quality Gate') {
+            when {
+                branch 'back'
+            }
+            steps {
+                timeout(time: 1, unit: 'HOURS') {
+                    waitForQualityGate abortPipeline: true
+            }
+          }
+        }
+
+        stage('Back Build and Push') {
+            when {
+                branch 'back'
+            }
+            steps {
+                script {
+                    dockerImage = docker.build("${ECR_REGISTRY}/devops-stock-management-api:${env.BUILD_NUMBER}")
+                }
+            }
+        }
+
+        stage('Back Push') {
+            when {
+                branch 'back'
+            }
+            steps {
+                script {
+                    docker.withRegistry("${ECR_REGISTRY}", "ecr:us-west-2") {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
+
+        stage('Infra Deploy') {
+            when {
+                branch 'infra'
+            }
+            steps {
+                withKubeConfig([credentialsId: 'kubeconfig', serverUrl: 'https://kube-cluster-url']) {
+                    sh 'helm upgrade chart-name chart-dir --set key=value'
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,26 @@
+pipeline {
+    stages {
+        stage('Fetch code') {
+            steps {
+                git branch: 'main', url: 'https://github.com/rafael556/devops-stock-management-infra.git'
+            }
+        }
+
+        stage('create EKS Cluster') {
+            steps {
+                script {
+                    sh 'terraform init'
+                    sh 'terraform apply --auto-approve'
+                }
+            }
+        }
+        // stage('Deploy EKS') {
+        //     steps {
+        //         script {
+        //             sh 'aws eks update-kubeconfig --name stock-management-cluster'
+        //             sh 'helm upgrade certificadora-cluster'
+        //         }
+        //     }
+        // }
+    }
+}
