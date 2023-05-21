@@ -12,21 +12,21 @@ pipeline {
                 stage('Frontend') {
                     steps {
                         dir(FRONTEND_PATH) {
-                            git branch: 'front', url: 'https://github.com/RenatoMoratto/devops-stock-management-web.git'
+                            git branch: 'main', url: 'https://github.com/RenatoMoratto/devops-stock-management-web.git'
                         }
                     }
                 }
                 stage('Backend') {
                     steps {
                         dir(BACKEND_PATH) {
-                            git branch: 'back', url: 'https://github.com/rafael556/devops-stock-management-api.git'
+                            git branch: 'main', url: 'https://github.com/rafael556/devops-stock-management-api.git'
                         }
                     }
                 }
                 stage('Infrastructure') {
                     steps {
                         dir(INFRA_PATH) {
-                            git branch: 'infra', url: 'https://github.com/rafael556/devops-stock-management-infra.git'
+                            git branch: 'main', url: 'https://github.com/rafael556/devops-stock-management-infra.git'
                         }
                     }
                 }
