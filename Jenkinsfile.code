@@ -7,7 +7,7 @@ pipeline {
         INFRA_PATH = "$WORKSPACE/devops-stock-management-infra"
     }
     stages {
-        stage('Fetch code') {
+        stage('Fetch Code') {
             parallel(failFast: true) {
                 stage('Frontend') {
                     steps {
@@ -19,7 +19,7 @@ pipeline {
                 stage('Backend') {
                     steps {
                         dir(BACKEND_PATH) {
-                            git branch: 'main', url: 'https://github.com/rafael556/devops-stock-management-api.git'
+                            git branch: 'back', url: 'https://github.com/rafael556/devops-stock-management-api.git'
                         }
                     }
                 }
@@ -44,6 +44,7 @@ pipeline {
         stage('Front Test') {
             steps {
                 dir(FRONTEND_PATH) {
+                    sh 'yarn test'
                     sh 'yarn coverage'
                 }
             }
@@ -56,11 +57,16 @@ pipeline {
             steps {
                 dir(FRONTEND_PATH) {
                     withSonarQubeEnv('sonar') {
-                        sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=devops-stock-management-web \
+                        sh """${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=devops-stock-management-web \
                         -Dsonar.projectName=devops-stock-management-web \
                         -Dsonar.projectVersion=1.0 \
-                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-                        '''
+                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                        -Dsonar.sources=src/ \
+                        -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/report/**,**/*test.js,**/*test.jsx,**/*test.ts,**/*test.tsx,**/*.config.* \
+                        -Dsonar.coverage.exclusions=**/node_modules/**,**/coverage/**,**/report/**,**/*test.js,**/*test.jsx,**/*test.ts,**/*test.tsx**/*.config.*
+
+                        """
                     }
                 }
             }
@@ -76,102 +82,94 @@ pipeline {
             }
         }
 
-//         stage('Build Docker image') {
-//             steps {
-//                 script {
-//                 docker.build(appRegistry + ":$BUILD_NUMBER", '/Dockerfile')
-//                 }
-//             }
-//         }
+        stage('Back Build') {
+            steps {
+                dir(BACKEND_PATH) {
+                    sh 'yarn'
+                }
+            }
+        }
 
-//         stage('Push Image to ECR') {
-//             steps{
-//             script {
-//               docker.withRegistry( vprofileRegistry, registryCredential ) {
-//                 dockerImage.push("$BUILD_NUMBER")
-//                 dockerImage.push('latest')
-//               }
-//             }
-//           }
-//         }
+        stage('Back Test') {
+            steps {
+                dir(BACKEND_PATH) {
+                    sh 'yarn test:cov'
+                }
+            }
+        }
 
-//         stage('Back Build') {
-//             when {
-//                 branch 'back'
-//             }
-//             steps {
-//                 sh 'yarn'
-//             }
-//         }
+        stage('Backend Analysis') {
+            environment {
+                scannerHome = tool 'sonar'
+            }
+            steps {
+                dir(BACKEND_PATH) {
+                    withSonarQubeEnv('sonar') {
+                        sh """${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=devops-stock-management-api \
+                        -Dsonar.projectName=devops-stock-management-api \
+                        -Dsonar.projectVersion=1.0 \
+                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                        -Dsonar.sources=src/ \
+                        -Dsonar.tests=src/ \
+                        -Dsonar.tests.inclusions=**/*spec.ts \
+                        -Dsonar.coverage.exclusions=**/node_modules/**,**/coverage/**,**/main.ts,**/*module.ts,**/*spec.ts
+                        """
+                    }
+                }
+            }
+        }
 
-//         stage('Back Test') {
-//             when {
-//                 branch 'back'
-//             }
-//             steps {
-//                 sh 'yarn test:cov'
-//             }
-//         }
+        stage('Back Quality Gate') {
+            steps {
+                timeout(time: 1, unit: 'HOURS') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        
 
-//         stage('Analysis') {
-//             environment {
-//                 scannerHome = tool 'sonar'
-//             }
-//             steps {
-//                 withSonarQubeEnv('sonar') {
-//                 sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=devops-stock-management-api \
-//                     -Dsonar.projectName=devops-stock-management-api \
-//                     -Dsonar.projectVersion=1.0 \
-//                     -Dsonar.testExecutionReportPaths=coverage/test-reporter.xml'
-//                 '''
-//                 }
-//             }
-//         }
+        stage('Login AWS') {
+            steps {
+                sh 'aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/${ACCOUNT_KEY}'
+            }
+        }
 
-//         stage('Back Quality Gate') {
-//             when {
-//                 branch 'back'
-//             }
-//             steps {
-//                 timeout(time: 1, unit: 'HOURS') {
-//                     waitForQualityGate abortPipeline: true
-//             }
-//           }
-//         }
+        stage('Backend Build') {
+            steps {
+                dir(BACKEND_PATH) {
+                    sh 'docker build -t ${BACKEND_IMAGE}:latest .'
+                }
+            }
+        }
 
-//         stage('Back Build and Push') {
-//             when {
-//                 branch 'back'
-//             }
-//             steps {
-//                 script {
-//                     dockerImage = docker.build("${ECR_REGISTRY}/devops-stock-management-api:${env.BUILD_NUMBER}")
-//                 }
-//             }
-//         }
+        stage('Back Push') {
+            steps {
+                sh 'docker push ${BACKEND_IMAGE}:latest'
+            }
+        }
 
-//         stage('Back Push') {
-//             when {
-//                 branch 'back'
-//             }
-//             steps {
-//                 script {
-//                     docker.withRegistry("${ECR_REGISTRY}", "ecr:us-west-2") {
-//                         dockerImage.push()
-//                     }
-//                 }
-//             }
-//         }
+        stage('Frontend Build Image') {
+            steps {
+                dir(FRONTEND_PATH) {
+                    sh 'docker build -t ${FRONTEND_IMAGE}:latest .'
+                }
+            }
+        }
 
-    //         stage('Infra Deploy') {
-    //             when {
-    //                 branch 'infra'
-    //             }
-    //             steps {
-    //                 withKubeConfig([credentialsId: 'kubeconfig', serverUrl: 'https://kube-cluster-url']) {
-    //                     sh 'helm upgrade chart-name chart-dir --set key=value'
-    //                 }
-    //             }
-    //         }
+        stage('Push Image to ECR') {
+            steps{
+                sh 'docker push ${FRONTEND_IMAGE}:latest'
+            }
+          }
+
+        stage('Infra Deploy') {
+            steps {
+                dir(INFRA_PATH) {
+                    sh 'helm upgrade ${CHART_NAME} ${CHART_DIR} --set api.image=${BACKEND_IMAGE},web.image=${FRONTEND_IMAGE}'
+                }
+            }
+        }
     }
 }
+

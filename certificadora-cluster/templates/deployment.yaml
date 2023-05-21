@@ -1,61 +1,47 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "certificadora-cluster.fullname" . }}
+  name: {{ .Values.web.name }}-deployment
   labels:
-    {{- include "certificadora-cluster.labels" . | nindent 4 }}
+    app: "{{ .Values.web.name }}"
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
-      {{- include "certificadora-cluster.selectorLabels" . | nindent 6 }}
+      app: {{ .Values.web.name }}
+  replicas: {{ default 1 .Values.web.replicaCount | int }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       labels:
-        {{- include "certificadora-cluster.selectorLabels" . | nindent 8 }}
+        app: {{ .Values.web.name }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      serviceAccountName: {{ include "certificadora-cluster.serviceAccountName" . }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - name: http
-              containerPort: {{ .Values.service.port }}
-              protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /
-              port: http
-          readinessProbe:
-            httpGet:
-              path: /
-              port: http
-          resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      - name: {{ .Values.web.name }}
+        image: "{{ .Values.web.image }}:{{.Values.web.tag}}"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: {{ .Values.web.service.containerPort | int }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.api.name }}-deployment
+  labels:
+    app: "{{ .Values.api.name }}"
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.api.name }}
+  replicas: {{ default 1 .Values.api.replicaCount | int }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.api.name }}
+    spec:
+      containers:
+      - name: {{ .Values.api.name }}
+        image: "{{ .Values.api.image }}:{{.Values.api.tag}}"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: {{ .Values.api.service.containerPort | int }}
+---
