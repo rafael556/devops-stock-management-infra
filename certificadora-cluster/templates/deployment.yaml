@@ -1,0 +1,49 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.web.name }}-deployment
+  labels:
+    app: "{{ .Values.web.name }}"
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.web.name }}
+  replicas: {{ default 1 .Values.web.replicaCount | int }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.web.name }}
+    spec:
+      containers:
+      - name: {{ .Values.web.name }}
+        image: "{{ .Values.web.image }}:{{.Values.web.tag}}"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: {{ .Values.web.service.containerPort | int }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.api.name }}-deployment
+  labels:
+    app: "{{ .Values.api.name }}"
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.api.name }}
+  replicas: {{ default 1 .Values.api.replicaCount | int }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.api.name }}
+    spec:
+      containers:
+      - name: {{ .Values.api.name }}
+        image: "{{ .Values.api.image }}:{{.Values.api.tag}}"
+        envFrom:
+          - configMapRef:
+              name: postgres
+        ports:
+        - containerPort: {{ .Values.api.service.containerPort | int }}
+---

@@ -1,0 +1,48 @@
+prometheus:
+  service:
+    type: NodePort
+  alertmanager:
+    enabled: false
+
+  pushgateway:
+    enabled: false
+
+  nodeExporter:
+    enabled: true
+
+grafana:
+  service:
+    type: NodePort
+  admin.userKey: admin
+  admin.passwordKey: admin
+
+postgres:
+  auth.username: user
+  auth.password: user
+  auth.database: stock
+
+web:
+  name: stock-web
+  replicaCount: 2
+  image: ${FRONTEND_IMAGE}
+  tag: latest
+  service:
+    containerPort: 3000
+    targetPort: 8072
+    type: NodePort
+
+api:
+  name: stock-api
+  replicaCount: 2
+  image: ${BACKEND_IMAGE}
+  tag: latest
+  service:
+    containerPort: 9001
+    targetPort: 8073
+    type: NodePort
+
+db:
+  host: ${DB_HOST}
+  name: ${DB_NAME}
+  user: ${DB_USER}
+  password: ${DB_PASSWORD}

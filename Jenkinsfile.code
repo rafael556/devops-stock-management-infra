@@ -1,0 +1,175 @@
+pipeline {
+    agent any
+
+    environment {
+        FRONTEND_PATH = "$WORKSPACE/devops-stock-management-web"
+        BACKEND_PATH = "$WORKSPACE/devops-stock-management-api"
+        INFRA_PATH = "$WORKSPACE/devops-stock-management-infra"
+    }
+    stages {
+        stage('Fetch Code') {
+            parallel(failFast: true) {
+                stage('Frontend') {
+                    steps {
+                        dir(FRONTEND_PATH) {
+                            git branch: 'main', url: 'https://github.com/RenatoMoratto/devops-stock-management-web.git'
+                        }
+                    }
+                }
+                stage('Backend') {
+                    steps {
+                        dir(BACKEND_PATH) {
+                            git branch: 'main', url: 'https://github.com/rafael556/devops-stock-management-api.git'
+                        }
+                    }
+                }
+                stage('Infrastructure') {
+                    steps {
+                        dir(INFRA_PATH) {
+                            git branch: 'main', url: 'https://github.com/rafael556/devops-stock-management-infra.git'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Front Build') {
+            steps {
+                dir(FRONTEND_PATH) {
+                    sh 'yarn'
+                }
+            }
+        }
+
+        stage('Front Test') {
+            steps {
+                dir(FRONTEND_PATH) {
+                    sh 'yarn test'
+                    sh 'yarn coverage'
+                }
+            }
+        }
+
+        stage('Front Scan') {
+            environment {
+                scannerHome = tool 'sonar'
+            }
+            steps {
+                dir(FRONTEND_PATH) {
+                    withSonarQubeEnv('sonar') {
+                        sh """${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=devops-stock-management-web \
+                        -Dsonar.projectName=devops-stock-management-web \
+                        -Dsonar.projectVersion=1.0 \
+                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                        -Dsonar.sources=src/ \
+                        -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/report/**,**/*test.js,**/*test.jsx,**/*test.ts,**/*test.tsx,**/*.config.* \
+                        -Dsonar.coverage.exclusions=**/node_modules/**,**/coverage/**,**/report/**,**/*test.js,**/*test.jsx,**/*test.ts,**/*test.tsx**/*.config.*
+
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Front Quality Gate') {
+            steps {
+                dir(FRONTEND_PATH) {
+                    timeout(time: 1, unit: 'HOURS') {
+                        waitForQualityGate abortPipeline: true
+                    }
+                }
+            }
+        }
+
+        stage('Back Build') {
+            steps {
+                dir(BACKEND_PATH) {
+                    sh 'yarn'
+                }
+            }
+        }
+
+        stage('Back Test') {
+            steps {
+                dir(BACKEND_PATH) {
+                    sh 'yarn test:cov'
+                }
+            }
+        }
+
+        stage('Backend Analysis') {
+            environment {
+                scannerHome = tool 'sonar'
+            }
+            steps {
+                dir(BACKEND_PATH) {
+                    withSonarQubeEnv('sonar') {
+                        sh """${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=devops-stock-management-api \
+                        -Dsonar.projectName=devops-stock-management-api \
+                        -Dsonar.projectVersion=1.0 \
+                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                        -Dsonar.sources=src/ \
+                        -Dsonar.tests=src/ \
+                        -Dsonar.tests.inclusions=**/*spec.ts \
+                        -Dsonar.coverage.exclusions=**/node_modules/**,**/coverage/**,**/main.ts,**/*module.ts,**/*spec.ts
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Back Quality Gate') {
+            steps {
+                timeout(time: 1, unit: 'HOURS') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        
+
+        stage('Login AWS') {
+            steps {
+                sh 'aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/${ACCOUNT_KEY}'
+            }
+        }
+
+        stage('Backend Build') {
+            steps {
+                dir(BACKEND_PATH) {
+                    sh 'docker build -t ${BACKEND_IMAGE}:latest .'
+                }
+            }
+        }
+
+        stage('Back Push') {
+            steps {
+                sh 'docker push ${BACKEND_IMAGE}:latest'
+            }
+        }
+
+        stage('Frontend Build Image') {
+            steps {
+                dir(FRONTEND_PATH) {
+                    sh 'docker build -t ${FRONTEND_IMAGE}:latest .'
+                }
+            }
+        }
+
+        stage('Push Image to ECR') {
+            steps{
+                sh 'docker push ${FRONTEND_IMAGE}:latest'
+            }
+          }
+
+        stage('Infra Deploy') {
+            steps {
+                dir(INFRA_PATH) {
+                    sh 'echo ${DB_HOST}'
+                    sh 'helm upgrade ${CHART_NAME} ${CHART_DIR} --set api.image=${BACKEND_IMAGE},web.image=${FRONTEND_IMAGE},db.host=${DB_HOST},db.name=${DB_NAME},db.user=${DB_USER},db.password=${DB_PASSWORD}'
+                }
+            }
+        }
+    }
+}
