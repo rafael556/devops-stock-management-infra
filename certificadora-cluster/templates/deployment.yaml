@@ -43,7 +43,7 @@ spec:
         image: "{{ .Values.api.image }}:{{.Values.api.tag}}"
         envFrom:
           - configMapRef:
-            name: postgres
+              name: postgres
         ports:
         - containerPort: {{ .Values.api.service.containerPort | int }}
 ---
