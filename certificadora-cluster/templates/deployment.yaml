@@ -1,4 +1,15 @@
 ---
+apiVersion: v1
+kind: ConfigMap 
+metadata: 
+  name: postgres
+  namespace: default 
+data:
+  DB_HOST: {{ .Values.db.host }}
+  DB_NAME: {{ .Values.db.name }}
+  DB_USER: {{ .Values.db.user }}
+  DB_PASSWORD: {{ .Values.db.password }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,7 +52,9 @@ spec:
       containers:
       - name: {{ .Values.api.name }}
         image: "{{ .Values.api.image }}:{{.Values.api.tag}}"
-        imagePullPolicy: IfNotPresent
+        envFrom:
+          - configMapRef:
+            name: postgres
         ports:
         - containerPort: {{ .Values.api.service.containerPort | int }}
 ---

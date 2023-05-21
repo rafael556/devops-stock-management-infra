@@ -26,7 +26,7 @@ pipeline {
                 stage('Infrastructure') {
                     steps {
                         dir(INFRA_PATH) {
-                            git branch: 'main', url: 'https://github.com/rafael556/devops-stock-management-infra.git'
+                            git branch: 'infra', url: 'https://github.com/rafael556/devops-stock-management-infra.git'
                         }
                     }
                 }
@@ -166,10 +166,9 @@ pipeline {
         stage('Infra Deploy') {
             steps {
                 dir(INFRA_PATH) {
-                    sh 'helm upgrade ${CHART_NAME} ${CHART_DIR} --set api.image=${BACKEND_IMAGE},web.image=${FRONTEND_IMAGE}'
+                    sh 'helm upgrade ${CHART_NAME} ${CHART_DIR} --set api.image=${BACKEND_IMAGE},web.image=${FRONTEND_IMAGE},db.host=${DB_HOST},db.name=${DB_NAME},db.user=${DB_USER},db.password=${DB_PASSWORD}'
                 }
             }
         }
     }
 }
-

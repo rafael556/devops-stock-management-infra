@@ -40,3 +40,9 @@ api:
     containerPort: 9001
     targetPort: 8073
     type: NodePort
+
+db:
+  host:
+  name: 
+  user: 
+  password: 
